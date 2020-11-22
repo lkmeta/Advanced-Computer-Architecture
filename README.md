@@ -248,19 +248,19 @@ self.cpu_cluster = devices.CpuCluster(self,
    + TimingSimpleCPU
    
    Αναλυτικότερα:
-   ### - **BaseSimpleCPU**  
+   ### + **BaseSimpleCPU**  
    The BaseSimpleCPU serves several purposes:  
 
     + Holds architected state, stats common across the SimpleCPU models.
     + Defines functions for checking for interrupts, setting up a fetch request, handling pre-execute setup, handling post-execute actions, and advancing the PC to the next instruction. These functions are also common across the SimpleCPU models.
     + Implements the ExecContext interface. The BaseSimpleCPU can not be run on its own. You must use one of the classes that inherits from BaseSimpleCPU, either AtomicSimpleCPU or TimingSimpleCPU.
    
-   ### - **AtomicSimpleCPU**  
+   ### + **AtomicSimpleCPU**  
    The AtomicSimpleCPU is the version of SimpleCPU that uses atomic memory accesses. It uses the latency estimates from the atomic accesses to estimate overall cache access time. The AtomicSimpleCPU is derived from BaseSimpleCPU, and implements functions to read and write memory, and also to tick, which defines what happens every CPU cycle. It defines the port that is used to hook up to memory, and connects the CPU to the cache.
    
    ![AtomicSimpleCPU](https://www.gem5.org/assets/img/AtomicSimpleCPU.jpg)
    
-   ### - **TimingSimpleCPU**  
+   ### + **TimingSimpleCPU**  
    The TimingSimpleCPU is the version of SimpleCPU that uses timing memory accesses (see Memory systems for details). It stalls on cache accesses and waits for the memory system to respond prior to proceeding. Like the AtomicSimpleCPU, the TimingSimpleCPU is also derived from BaseSimpleCPU, and implements the same set of functions. It defines the port that is used to hook up to memory, and connects the CPU to the cache. It also defines the necessary functions for handling the response from memory to the accesses sent out.
    
    ![TimingSimpleCPU](https://www.gem5.org/assets/img/TimingSimpleCPU.jpg)
@@ -279,8 +279,89 @@ self.cpu_cluster = devices.CpuCluster(self,
    
    
 #### **a) Ο κώδικας που έγραψα για να δοκιμάσω την προσομοίωση κάνει το εξής:**
-   + υπολογίζει τον fibonacci αριθμό του 46 με δυναμικό προγραμματισμό   
+   + υπολογίζει τον fibonacci αριθμό του 46 με δυναμικό προγραμματισμό  
    
+  Το πρόγραμμα γράφτηκε σε C και στην συνέχεια με χρήση της παρακάτω εντολής κάναμε compile για να μπορούμε να το τρέξουμε με τον gem5.
+  ```c
+  arm-linux-gnueabihf-gcc --static fib.c -o fib_arm
+  ```  
+  
+  Εκτελώντας τις παρακάτω εντολές διαδοχικά, δημιουργήσαμε τις απαιτούμενες προσομοιώσεις για το πρόγραμμα μας.  
+  Αναλυτικότερα, υλοποιούν το πρόγραμμα με χρήση δύο διαφορετικών CPUs με default επιλογή για όλα τα υπόλοιπα.  
+  ```c
+  ./build/ARM/gem5.opt -d fib_res_MinorCPU configs/example/se.py --cpu-type=MinorCPU --caches -c my_tests/fib_with_dynamic_programming/fib_arm
+  ./build/ARM/gem5.opt -d fib_res_TimingSimpleCPU configs/example/se.py --cpu-type=TimingSimpleCPU --caches -c my_tests/fib_with_dynamic_programming/fib_arm
+  ```  
+   
+   
+   + **Χρόνοι εκτέλεσης προγράμματος**  
+      + Βρίσκονται στο αρχείο **stats.txt** 
+   
+   | CPU model  |  sim_seconds |
+   | --- |:---:|
+   | Minor CPU | 0.000039 |
+   | TimingSimpleCPU | 0.000047 |  
+   
+#### **b) Παρατηρώντας τα προηγούμενα, προκύπτει πως υπάρχει διαφορά χρόνων στα δυο διαφορετικά μοντέλα CPUs.**  
+   
+   Η διαφορά αυτή στους χρόνους που προέκυψαν οφείλεται στο γεγονός ότι ο TimingSimpleCPU περιμένει την προσπέλαση μνήμης να ολοκληρωθεί προτού συνεχίσει. Αντίθετα, στον MinorCPU δεν συμβαίνει αυτό με αποτέλεσμα να έχουμε ταχύτερη προσομοίωση.
+
+#### **c) Αλλαγή μνήμης και συχνότητα λειτουργίας του προγράμματος.**  
+
+Στο συγκεκριμένο ερώτημα έγιναν δύο αλλαγές που αφορούν την τεχνολογία της μνήμης και την συχνότητα ως εξής:  
++ **Αλλαγή μνήμης**  
+   Τρέχοντας την παρακάτω εντολή,    
+   ```c
+   ./build/ARM/gem5.opt configs/example/se.py --list-mem-type
+   ```
+   
+   προκύπτει η λίστα που ακολουθεί στην οποία φαίνονται όλες οι διαθέσιμες μνήμες που μπορούμε να χρησιμοποιήσουμε.  
+      
+   ![mem-list](https://github.com/lkmeta/Advanced-Computer-Architecture/blob/main/readme_imgs/mem_list.png "Mem List")
+   
+   Εμείς χρησιμοποιήσαμε την **DDR4_2400_16X4** για το παράδειγμα μας.
+   
++ **Αλλαγή συχνότητας**  
+   Η default συχνότητα που δοκιμάσαμε τo πρόγραμμα μας προηγουμένως ήταν 1GHz. Για το συγκεκριμένο ερώτημα ωστόσο, επιλέξαμε να τροποποιήσουμε την συχνότητα και να τρέξουμε δύο προσομοιώσεις με συχνότητες 0.8GHz και 1.4GHz. Αυτό υλοποιήθηκε με την προσθήκη των παρακάτω εντολών διαδοχικά.
+   ```c
+   --sys-clock="0.8GHz"
+   --sys-clock="1.4GHz"
+   ```
+   
+   
+   Στις παρακάτω εικόνες φαίνονται οι εντολές που χρησιμοποιήθηκαν για το MinorCPU μοντέλο, αντίστοιχα έγιναν και για το TimingSimpleCPU.
+   
+   ![minorcpu_08](https://github.com/lkmeta/Advanced-Computer-Architecture/blob/main/readme_imgs/minorcpu_08.png "MinorCPU 0.8")
+   
+   ![minorcpu_14](https://github.com/lkmeta/Advanced-Computer-Architecture/blob/main/readme_imgs/minorcpu_14.png "MinorCPU 1.4")
+   
+   
+   
+ ### **Πίνακας με αποτελέσματα από τα αρχεία stats.txt**  
+ 
+   | CPU model  |  sim_seconds | system.clk_domain.clock |
+   | --- |:---:| ---: |
+   | MinorCPU 0.8GHz | 0.000040 | 1250 |
+   | MinorCPU 1.4GHz | 0.000036 |  714 |
+   | TimingSimpleCPU 0.8GHz | 0.000048 | 1250 |
+   | TimingSimpleCPU 1.4GHz | 0.000045 |  714 |
+   
+   Παρατηρούμε ότι οι χρόνοι στο TimingSimpleCPU μοντέλο παραμένουν μεγαλύτεροι από το MinorCPU μοντέλο, γεγονός που είναι αναμενόμενο. Επίσης λογικό και αναμενόμενο είναι η αύξηση της συχνότητας να μας οδηγεί σε μείωση του χρόνου σε κάθε μοντέλο ξεχωριστά.
+
+
+
+## **Κριτική**
+
++ **Τι έμαθα από την εργασία;**  
+Αρχικά, μέσα από τη συγκεκριμένη εργασία -η οποία ήταν και η πρώτη μου επαφή με την αρχιτεκτονική υπολογιστών- κατάφερα να κατανοήσω λίγο περισσότερο την δομή και την λειτουργία του επεξεργαστή. Σαφέστερα, θεωρώ πως πλέον έχω μια ελαφρώς διαφορετική αντίληψη για το πως ο επεξεργαστής εκτελεί εντολές ανάλογα με τι ορίσματα παίρνει σαν εντολές στην προσομοίωση. Η προσομοίωση με gem5 η οποία ήταν επίσης πρωτότυπη διαδικασία για εμένα, με βοήθησε να μάθω να χειρίζομαι κάποιες εντολές με σκοπό την διαχείριση των μοντέλων CPUs. Επιπλέον, μέσα από την συγκεκριμένη εργασία, έμαθα τα βασικά για Markdown και Github που δυστυχώς δεν γνώριζα νωρίτερα. Τέλος, εξοικειώθηκα περισσότερο με το VMware και τα Ubuntu.
+
++ **Θεωρώ την εργασία απλοϊκή ή δύσκολη και τι δυσκόλεψε;**  
+Με βάση το επίπεδο γνώσεων μου στην αρχιτεκτονική υπολογιστών το οποίο είναι αρχάριο, θεωρώ πως η εργασία αυτή είναι σχετικά δύσκολη. Ακριβέστερα, βρέθηκα αντιμέτωπος με πολλά νέα σε εμένα προγράμματα και προβλήματα που απαίτηταν αρκετό χρόνο για την επίλυση τους. Επιπλέον, αρκετά σημεία με δυσκόλεψαν όπως το αρχικό build με την εντολή ``` scons build/ARM/gem5.opt -j Ν ``` στην οποία δεν ήξερα ακριβώς ποια τιμή θα έπρεπε να βάλω στο Ν. Ένα ακόμη σημείο που με δυσκόλεψε ήταν η εντολή ```  ./build/ARM/gem5.opt configs/example/se.py --cpu=MinorCPU –caches tests/test-progs/hello/bin/arm/linux/hello ``` η οποία για να τρέξει έπρεπε να τροποποιηθεί ως εξής: ``` ./build/ARM/gem5.opt configs/example/se.py --cpu=MinorCPU –-caches -c tests/test-progs/hello/bin/arm/linux/hello  ``` . Αυτά αποτέλεσαν δύο κύρια σημεία που καθυστέρησαν την ολοκλήρωση της εργασίας μου.
+
++ **Πως θα σχολίαζα τις οδηγίες που μας δόθηκαν;**  
+Αρχικά, οι οδηγίες που δόθηκαν ήταν αναλυτικότατες και δεν υπήρχαν περιθώρια για να δημιουργηθούν απορίες. Αν εξαιρέσουμε τα δύο παραπάνω σημεία που με δυσκόλεψαν, όλα τα υπόλοιπα βγήκαν αμέσως ακολουθώντας τα βήματα από το pdf. Το μόνο που θα άλλαζα είναι οι διευκρινήσεις για το readme αρχείο, σε κάποια σημεία θεωρώ πως χρειαζόμουν περισσότερη καθοδήγηση για τις πληροφορίες που έπρεπε να πάρω από τα αρχεία των προσομοιώσεων. Επιπλέον, χρήσιμα και σημαντικά θεώρησα τις οδηγίες για την μετατροπή ενός αρχείου .c σε file που να γίνεται compile από τον gem5.
+
+Ευελπιστώ να έχω απαντήσει σε όλα τα ερωτήματα της εργασίας όπως ζητήθηκαν κυρίως γιατί στα εκτενεί αρχεία που προέκυπταν από τις προσομοιώσεις δεν γνώριζα αν έπαιρνα σωστά και όλες τις πληροφορίες που έπρεπε να πάρω. Αυτό οφείλεται προφανώς στην περιορισμένη γνώση μου στον συγκεκριμένο αντικείμενο. Τέλος, η εργασία είναι αναμφισβήτητα ενδιαφέρουσα για όσους θέλουν να ασχοληθούν με τον τομέα της ηλεκτρονικής.
 
 
 
